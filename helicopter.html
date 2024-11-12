@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Demo Group 03</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+    </style>
+    <script src="threejs/build/three.js"></script>
+
+
+
+</head>
+<script>
+
+    // import * as THREE from 'three';
+    // import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
+    // Variables globales 
+    let activeCamera, controls, scene, renderer;
+    let helicopter, groundMesh
+    let groundBB, helicopterBB
+    let orbitalCamera, topCamera, sideCamera, backCamera
+    let hingeGroup
+
+    const PI = 3.1415927;
+
+
+
+
+    function init() {
+
+        // Crear escena, camera y luces
+        scene = new THREE.Scene();
+
+        //Camara Base
+
+        orbitalCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        orbitalCamera.position.set(0, 50, 0);
+        orbitalCamera.lookAt(0, 0, 0)
+
+
+        // Crear un renderer
+        renderer = new THREE.WebGLRenderer();
+        renderer.shadowMapEnabled = true;
+        renderer.setClearColor(0xADD8E6, 1.0);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        //Lighting
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.castShadow = true
+        const light = new THREE.AmbientLight( 0x404040 ); // soft white light scene.add( light );
+        scene.add(directionalLight);
+        scene.add(light)
+
+
+
+        //Make the terrain
+
+        const groundGeometry = new THREE.PlaneGeometry(100, 100, 100, 100);
+        let disMap = new THREE.TextureLoader().setPath("images/").load("map.png")
+        
+
+        const groundMat = new THREE.MeshStandardMaterial({
+            color: 0xdbdbdb,
+            wireframe: false,
+            displacementMap: disMap,
+            displacementScale: 10
+        })
+        groundMesh = new THREE.Mesh(groundGeometry, groundMat);
+        scene.add(groundMesh)
+        groundMesh.rotation.x = -Math.PI / 2;
+        groundMesh.position.y = -10
+
+
+        groundBB = new THREE.Box3(new THREE.Vector3(), new THREE.Vector3());
+        groundBB.setFromObject(groundMesh);
+        groundBB.max.y = -5
+        box2 = new THREE.BoxHelper(groundMesh, 0xffff00); scene.add(box2);
+
+
+        //armar helicoptero
+
+
+
+        const fuselajeHeli = renderBody()
+        const engines = renderEngines()
+        const legs = renderLegs()
+
+
+        helicopter = new THREE.Group()
+        helicopter.add(fuselajeHeli)
+        helicopter.add(engines)
+        helicopter.add(legs)
+
+        helicopter.castShadow = true;
+        scene.add(helicopter)
+
+        // Adding bounding box to our black box
+        helicopterBB = new THREE.Box3();
+        // helicopterBB.setFromObject(helicopter);
+
+
+        box1 = new THREE.BoxHelper(helicopter, 0xffff00); scene.add(box1);
+        helicopter.add(box1)
+
+
+        //Camaras del helicoptero
+
+        backCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        backCamera.position.set(helicopter.position.x+2, helicopter.position.y+2, helicopter.position.z + 60);
+        backCamera.lookAt(helicopter.position)
+        helicopter.add(backCamera)
+
+        sideCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        sideCamera.position.set(helicopter.position.x + 40, helicopter.position.y, helicopter.position.z);
+        sideCamera.lookAt(helicopter.position)
+        helicopter.add(sideCamera)
+
+
+        topCamera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
+        topCamera.position.set(helicopter.position.x, helicopter.position.y + 40, helicopter.position.z);
+        topCamera.lookAt(helicopter.position)
+        helicopter.add(topCamera)
+
+        // ///////////////////
+
+
+        // const points = [];
+        // for (let i = 0; i < 10; i++) { 
+        //     points.push(new THREE.Vector2(Math.sin(i * 0.2) * 10 + 5, (i - 5) * 2)); 
+        // } 
+        // const geometry = new THREE.LatheGeometry(points); 
+        // const material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); 
+        // const lathe = new THREE.Mesh(geometry, material); 
+        // lathe.scale.set(5,5,5)
+        // scene.add(lathe);
+        // /////////////
+
+
+
+
+
+
+
+
+        // Agregar la salida del render al elemento html
+        document.body.appendChild(renderer.domElement);
+
+
+        activeCamera = orbitalCamera
+
+        // activeCamera.lookAt(lathe.position)
+        setupKeyControls()
+        // call the render function
+        render();
+    }
+    function setupKeyControls() {
+        // tocar boton para pasar y resumir
+        document.onkeydown = function (evento) {
+
+
+            switch (evento.keyCode) {
+
+
+                case 49://key 1 vista orbital
+                    activeCamera = orbitalCamera
+                    render()
+                    break;
+                case 50://key 2 vista trasera
+                    activeCamera = backCamera
+                    render()
+                    break;
+
+                case 51://key 3 vista lateral
+                    activeCamera = sideCamera
+                    render()
+                    break;
+
+                case 52://key 4 vista superior
+                    activeCamera = topCamera
+                    render()
+                    break;
+
+                case 81: // Key Q subir
+
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateY(1 / 24)
+                    if (rotorList.length != 0) {
+                        rotorList.forEach(element => {
+                            element.rotateY(Math.PI / 4)
+                            if (Math.abs(element.parent.rotation.x) > 0 && Math.abs(element.parent.rotation.x) > 0.01) {
+                                if (element.parent.parent.name.includes("2") || element.parent.parent.name.includes("3")) {
+                                    element.parent.rotateX(-Math.PI / 16)
+                                } else {
+                                    element.parent.rotateX(Math.PI / 16)
+                                }
+                            }
+                        });
+                    }
+                    render()
+                    break;
+
+                case 69: // Key E bajar
+                    if (collisionCheck()) {
+                        console.log("Collision Detected")
+                        render()
+                        break
+                    }
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateY(-1 / 24)
+                    if (rotorList.length != 0) {
+                        rotorList.forEach(element => {
+                            element.rotateY(Math.PI / 4)
+                            if (Math.abs(element.parent.rotation.x) > 0 && Math.abs(element.parent.rotation.x) > 0.01) {
+                                if (element.parent.parent.name.includes("2") || element.parent.parent.name.includes("3")) {
+                                    element.parent.rotateX(-Math.PI / 16)
+                                } else {
+                                    element.parent.rotateX(Math.PI / 16)
+                                }
+                            }
+                        });
+                    }
+                    render()
+                    break;
+
+                case 65: // Key A Left
+
+                    if (collisionCheck()) {
+                        console.log("Collision Detected")
+                        render()
+                        break
+                    }
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateX(-1 / 24)
+                    render()
+                    break;
+                case 68: // Key D right
+
+                    if (collisionCheck()) {
+                        console.log("Collision Detected")
+                        render()
+                        break
+                    }
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateX(1 / 24)
+                    render()
+                    break;
+
+                case 87: // Key W Adelante
+
+                    if (collisionCheck()) {
+                        console.log("Collision Detected")
+                        render()
+                        break
+                    }
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateZ(-1 / 24)
+                    if (rotorList.length != 0) {
+                        rotorList.forEach(element => {
+                            element.rotateY(Math.PI / 4)
+                            if (Math.abs(element.parent.rotation.x) < Math.PI / 4) {
+                                if (element.parent.parent.name.includes("2") || element.parent.parent.name.includes("3")) {
+                                    element.parent.rotateX(Math.PI / 16)
+                                } else {
+                                    element.parent.rotateX(-Math.PI / 16)
+                                }
+                            }
+                        });
+                    }
+                    render()
+                    break;
+                case 83: // Key S Atras
+
+                    if (collisionCheck()) {
+                        console.log("Collision Detected")
+                        render()
+                        break
+                    }
+                    if (!engine_on)
+                        engine_on = true
+                    helicopter.translateZ(1 / 24)
+
+                    render()
+                    break;
+
+                case 84: // Key T Retraer/expandir las patas
+
+                    if (leg_extended) {
+                        legs_moving = true
+                    }
+                    else if (!leg_extended) {
+                        legs_moving = true
+                    }
+
+                    render()
+                    break;
+                case 80: // Key P Puerta y escalera
+
+                    if (ladder_extended) {
+                        ladder_moving = true
+                    }
+                    else if (!ladder_extended) {
+                        ladder_moving = true
+                    }
+
+                    if (door_extended) {
+                        door_moving = true
+                    }
+                    else if (!door_extended) {
+                        door_moving = true
+                    }
+
+                    render()
+                    break;
+
+                case 72: // Key T Retraer/expandir los motores
+
+                    if (engine_extended) {
+                        engine_moving = true
+                    }
+                    else if (!engine_extended) {
+                        engine_moving = true
+                    }
+
+                    render()
+                    break;
+
+            }
+        }
+    }
+
+    function renderBody() {
+
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0);
+        shape.lineTo(-1, 1)
+        shape.lineTo(0, 2)
+        shape.lineTo(2, 2)
+        shape.lineTo(3, 1)
+        shape.lineTo(2, 0)
+        shape.lineTo(0, 0)
+        const extrudeSettings = { steps: 2, depth: 2, bevelEnabled: true, bevelThickness: 0, bevelSize: 1, bevelOffset: 0, bevelSegments: 1 };
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const materialPurple = new THREE.MeshPhongMaterial({ color: 0xBF40BF });
+        const mesh = new THREE.Mesh(geometry, materialPurple);
+
+        const segundoanillo = mesh.clone()
+        segundoanillo.position.z += 6
+        const cuerpoHeli = mesh.clone()
+        const materialCyan = new THREE.MeshPhongMaterial({ color: 0x33fbff })
+        cuerpoHeli.material = materialCyan
+        cuerpoHeli.position.z += 2
+        cuerpoHeli.scale.set(0.8, 0.8, 2)
+        const cuerpoBackHeli = mesh.clone()
+        cuerpoBackHeli.material = materialCyan
+        cuerpoBackHeli.position.z += 8
+        cuerpoBackHeli.scale.set(0.8, 0.8, 0.25)
+
+
+        ///////////
+
+        const cockpitShape = new THREE.Shape();
+
+        cockpitShape.moveTo(-1, 1);
+        //cockpitShape.bezierCurveTo(0, 0, 2, 0, 3, 1);
+        cockpitShape.lineTo(0, 0)
+        cockpitShape.lineTo(2, 0)
+        cockpitShape.lineTo(3, 1)
+
+        cockpitShape.lineTo(2, 2)
+        cockpitShape.lineTo(0, 2)
+        cockpitShape.lineTo(-1, 1)
+
+
+        const cockpitExtrudeSettings = {
+            depth: 3,
+            bevelEnabled: true,
+            bevelSegments: 2,
+            steps: 4,
+            bevelSize: 1,
+            bevelThickness: 4,
+            bevelOffset: -1,
+        };
+
+
+        const cockpitGeometry = new THREE.ExtrudeGeometry(cockpitShape, cockpitExtrudeSettings);
+
+        const cockpit = new THREE.Mesh(cockpitGeometry, materialCyan);
+        cockpit.translateX(-0.2)
+        cockpit.name = "cockpit"
+
+
+        /////////////
+
+
+        const geometryDoor = new THREE.BoxGeometry(0.1, 2, 1);
+        const materialBlue = new THREE.MeshPhongMaterial({ color: 0x330bff })
+        const door = new THREE.Mesh(geometryDoor, materialBlue);
+        door.name = "door"
+        door.translateX(3).translateY(0).translateZ(3).rotateZ(-PI / 4)
+
+
+
+
+
+        const geometryRamp = new THREE.BoxGeometry(0.1, 4, 1);
+        const materialRed = new THREE.MeshPhongMaterial({ color: 0xff0000  })
+        const ramp = new THREE.Mesh(geometryRamp, materialRed);
+        ramp.name = "ramp"
+        ramp.translateX(2).translateY(-2).translateZ(4)
+
+        const bannerGeometry = new THREE.BufferGeometry();
+        const vertices = new Float32Array([-1.0, -1.0, 1.0, // v0 
+            1.0, -1.0, 1.0, // v1 
+            1.0, 1.0, 1.0, // v2 
+            -1.0, 1.0, 1.0, // v3
+        ]);
+        const indices = [0, 1, 2, 2, 3, 0,];
+        bannerGeometry.setIndex(indices);
+        bannerGeometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        // material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const bannerMesh = new THREE.Mesh(bannerGeometry, materialRed)
+        bannerMesh.translateZ(4).translateX(0.8).translateY(1.5).rotateX(-Math.PI/2)
+
+        const fuselajeHeli = new THREE.Group()
+        fuselajeHeli.name = "fuselajeHeli"
+        fuselajeHeli.add(mesh)
+        fuselajeHeli.add(segundoanillo)
+        fuselajeHeli.add(cuerpoHeli)
+        fuselajeHeli.add(cuerpoBackHeli)
+        fuselajeHeli.add(door)
+        fuselajeHeli.add(ramp)
+        fuselajeHeli.add(cockpit)
+        fuselajeHeli.add(bannerMesh)
+
+        return fuselajeHeli
+
+    }
+    function renderEngines() {
+        const materialWhite = new THREE.MeshPhongMaterial({ color: 0xffffff });
+
+        const geometryRotorCenter = new THREE.CylinderGeometry(1, 1, 1)
+        const geometryBox = new THREE.BoxGeometry(1, 1, 1).translate(0, 0, -1.2)
+        const geometryRotorCasing = new THREE.TorusGeometry(3.5, 0.5, 16, 100).rotateX(PI / 2);
+
+        const materialGreen = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const materialRed = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        const materialBlack = new THREE.MeshPhongMaterial({ color: 0x000000 })
+        // const material = new THREE.MeshNormalMaterial();
+
+        const rotorCenter = new THREE.Mesh(geometryRotorCenter, materialRed);
+        rotorCenter.name = 'rotorCenter'
+        rotorCenter.castShadow = true;
+        const rotorCasing = new THREE.Mesh(geometryRotorCasing, materialWhite);
+        rotorCasing.name = 'rotorCasing'
+        rotorCasing.castShadow = true
+
+        const rotorMoving = new THREE.Group()
+        rotorMoving.name = 'rotorMoving'
+        const rotorFull = new THREE.Group()
+        rotorFull.name = 'rotorFull'
+        rotorMoving.add(rotorCenter)
+
+        var rotorBladeList = []
+        const NUMBEROFBLADES = 8
+
+        let originalRotorBlade = new THREE.Mesh(geometryBox, materialGreen);
+
+        for (let i = 0; i < NUMBEROFBLADES; i++) {
+            const mesh = originalRotorBlade.clone();
+            // changes made to position and rotation to not effect original
+            const rad = Math.PI * 2 * (i / NUMBEROFBLADES);
+            const x = Math.cos(rad) * 0.1;
+            const z = Math.sin(rad) * 0.1;
+            mesh.position.set(x, 0, z);
+            mesh.scale.set(0.5, 0.1, 1.7)
+            mesh.rotation.z = PI / 4
+            mesh.lookAt(originalRotorBlade.position);
+            rotorMoving.add(mesh);
+        }
+
+
+
+
+        // for (let i = 0; i < 8; i++) {
+        //     let copy = originalRotorBlade.clone()
+        //     new THREE.Mesh(geometryBox, materialGreen);
+        //     let rotorBlade = new THREE.Mesh(geometryBox, materialGreen);
+        //     rotorBlade.name = 'rotorBlade_' + (i + 1);
+        //     rotorBlade.rotation.z = PI / 4
+        //     rotorBlade.scale.set(0.5, 0.1, 1.7)
+        //     rotorBladeList[i] = rotorBlade
+        //     rotorMoving.add(rotorBlade)
+        //     rotorMoving.rotateY((2 * PI) / NUMBEROFBLADES)
+        //     // rotorMoving.remove(rotorBlade)
+        // }
+        // rotorBladeList.forEach(blade => {
+        //     rotorMoving.add(blade)
+        // });
+        rotorFull.add(rotorMoving)
+        rotorFull.add(rotorCasing)
+        // const newrotorBlade= new THREE.Mesh(geometryBox,materialBlack)
+        // scene.add(newrotorBlade)
+        // scene.add(rotorFull)
+
+        rotorFull.translateX(15)
+        const geometryEngineMountingPoint = new THREE.CylinderGeometry(2, 2, 8, 32)
+        const engineMountingPoint = new THREE.Mesh(geometryEngineMountingPoint, materialWhite)
+        engineMountingPoint.rotateX(PI / 2)
+
+        // engineMountingPoint.scale.set(1,1,4)
+        const geometryMountingArm = new THREE.ConeGeometry(2, 10, 32);
+        const mountingArm = new THREE.Mesh(geometryMountingArm, materialBlack)
+        mountingArm.rotateZ(-PI / 2)
+        mountingArm.translateY(5.5)
+        mountingArm.name = "mountingArm"
+
+        const fullArmAssembly = new THREE.Group()
+        fullArmAssembly.name = 'fullArmAssembly'
+        fullArmAssembly.add(engineMountingPoint)
+        fullArmAssembly.add(mountingArm)
+        fullArmAssembly.add(rotorFull)
+
+        fullArmAssembly.scale.set(0.3, 0.3, 0.3)
+        fullArmAssembly.position.x += 3
+        fullArmAssembly.position.y += 3
+        fullArmAssembly.position.z += 1
+
+        const fullArmAssembly2 = fullArmAssembly.clone().rotateZ(PI).translateX(4)
+        fullArmAssembly2.name = "fullArmAssembly2"
+        const fullArmAssembly3 = fullArmAssembly.clone().rotateZ(PI).translateX(4).translateZ(6)
+        fullArmAssembly3.name = "fullArmAssembly3"
+        const fullArmAssembly4 = fullArmAssembly.clone().translateZ(6)
+        fullArmAssembly4.name = "fullArmAssembly4"
+
+        const engines = new THREE.Group()
+        engines.name = 'engine'
+        engines.add(fullArmAssembly)
+        engines.add(fullArmAssembly2)
+        engines.add(fullArmAssembly3)
+        engines.add(fullArmAssembly4)
+        return engines
+
+    }
+
+    function renderLegs() {
+
+        const shape = new THREE.Shape();
+        shape.moveTo(0, 0);
+        shape.lineTo(-0.3, 0)
+        shape.lineTo(0, 0.5)
+        shape.lineTo(1, 0.5)
+        shape.lineTo(1.2, 0)
+        shape.lineTo(0, 0)
+        const extrudeSettings = { steps: 2, depth: 2, bevelEnabled: false, bevelThickness: 1, bevelSize: 1, bevelOffset: 0, bevelSegments: 1 };
+        const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+        const materialCyan = new THREE.MeshPhongMaterial({ color: 0x33fbff })
+        const materialCyan2 = new THREE.MeshPhongMaterial({ color: 0x330bff })
+        const foot = new THREE.Mesh(geometry, materialCyan);
+        foot.name = "foot"
+
+        const shapePoints = [];
+        for ( let i = 0; i < 10; i ++ ) { 
+            shapePoints.push( new THREE.Vector2( Math.sin( i * 0.2 ) * 10 + 5, ( i - 5 ) * 2 ) ); 
+        } 
+        const lathegeometry = new THREE.LatheGeometry( shapePoints ); 
+        // const material = new THREE.MeshBasicMaterial( { color: 0xffff00 } ); 
+        const lathe = new THREE.Mesh( lathegeometry, materialCyan );
+        lathe.scale.set(0.05,0.05,0.05)
+        lathe.rotateZ(Math.PI).translateZ(0.8).translateY(4).translateX(0) 
+        scene.add( lathe );
+
+
+
+
+        const geometryCylinder = new THREE.CylinderGeometry(0.2, 0.2, 3, 32)
+        const leg = new THREE.Mesh(geometryCylinder, materialCyan2)
+        leg.name = "leg"
+        leg.translateX(0).translateZ(0.8).translateY(-2)
+
+        // const segundoanillo=mesh.clone()
+        // segundoanillo.position.z+=6
+        // const cuerpoHeli=mesh.clone()
+        // const materialCyan= new THREE.MeshPhongMaterial({color:0x33fbff})
+        // cuerpoHeli.material=materialCyan
+        // cuerpoHeli.position.z+=2
+        // cuerpoHeli.scale.set(0.8,0.8,2)
+
+        const fullLeg = new THREE.Group()
+        // fullLeg.add(foot)
+        fullLeg.add(lathe)
+        fullLeg.name = "foot1"
+        fullLeg.add(leg)
+
+        // fullLeg.translateZ(-0.25).translateY(-4.5).translateX(-0.5)
+        const fullLeg2 = fullLeg.clone().translateX(2)
+        fullLeg.name = "foot2"
+        const fullLeg3 = fullLeg.clone().translateX(2).translateZ(6)
+        fullLeg.name = "foot3"
+        const fullLeg4 = fullLeg.clone().translateZ(6)
+        fullLeg.name = "foot4"
+
+        const legs = new THREE.Group()
+        legs.add(fullLeg)
+        legs.add(fullLeg2)
+        legs.add(fullLeg3)
+        legs.add(fullLeg4)
+        legs.name = "legs"
+
+        return legs
+
+    }
+
+    function collisionCheck() {
+        if (groundBB.intersectsBox(helicopterBB.setFromObject(helicopter))) {
+            return true
+        }
+        return false
+    }
+
+    let engine_on = false
+
+    let engine_moving = false;
+    let engine_extended = true;
+    let engine_height = 0
+
+    let legs_moving = false;
+    let leg_extended = true;
+    let leg_height = 0
+
+    let ladder_moving = false;
+    let ladder_extended = true;
+    let ladder_height = 0
+
+    let door_moving = false;
+    let door_extended = true;
+    let door_step = 0
+
+
+    let rotorList = []
+    function render() {
+
+        renderer.render(scene, activeCamera);
+        if (engine_on) {
+            if (rotorList.length == 0) {
+                const engine = helicopter.getObjectByName("engine")
+                engine.children.forEach(element => {
+                    let rotor = element.getObjectByName("rotorFull")
+                    rotorList.push(rotor.getObjectByName("rotorMoving"))
+                });
+            }
+            rotorList.forEach(r => {
+                r.rotateY(PI / 220)
+            })
+        }
+        if (leg_extended && legs_moving) {
+            const legs = helicopter.getObjectByName("legs")
+            legs.translateY(0.2)
+            leg_height += 2
+            if (leg_height == 30) {
+                leg_extended = false
+                legs_moving = false
+            }
+        }
+        if (!leg_extended && legs_moving) {
+            const legs = helicopter.getObjectByName("legs")
+            legs.translateY(-0.2)
+            leg_height -= 2
+            if (leg_height == 0) {
+                leg_extended = true
+                legs_moving = false
+            }
+        }
+        if (ladder_extended && ladder_moving) {
+            const ramp = helicopter.getObjectByName("ramp")
+            ramp.translateY(0.2)
+            ladder_height += 2
+
+            if (ladder_height == 30) {
+                ramp.scale.set(1, 0.5, 1)
+                ladder_extended = false
+                ladder_moving = false
+            }
+        }
+        if (!ladder_extended && ladder_moving) {
+            const ramp = helicopter.getObjectByName("ramp")
+            ramp.translateY(-0.2)
+
+            ladder_height -= 2
+            if (ladder_height == 0) {
+                ramp.scale.set(1, 1, 1)
+                ladder_extended = true
+                ladder_moving = false
+            }
+        }
+        if (door_extended && door_moving) {
+            const door = helicopter.getObjectByName("door")
+            door.translateZ(+0.1)
+            door_step += 3
+
+            if (door_step == 30) {
+                door_extended = false
+                door_moving = false
+            }
+        }
+        if (!door_extended && door_moving) {
+            const door = helicopter.getObjectByName("door")
+            door.translateZ(-0.1)
+            door_step -= 3
+
+            if (door_step == 0) {
+                door_extended = true
+                door_moving = false
+            }
+        }
+
+        if (engine_extended && engine_moving) {
+            const engines = helicopter.getObjectByName("engine")
+            engines.children.forEach(element => {
+                const arm = element.getObjectByName("mountingArm")
+                const rotor = element.getObjectByName("rotorFull")
+                arm.translateY(-0.5)
+                rotor.translateX(-0.5)
+                engine_height += 1
+                if (engine_height == 60) {
+                    engine_extended = false
+                    engine_moving = false
+                }
+            });
+        }
+        if (!engine_extended && engine_moving) {
+            const engines = helicopter.getObjectByName("engine")
+            engines.children.forEach(element => {
+                const arm = element.getObjectByName("mountingArm")
+                const rotor = element.getObjectByName("rotorFull")
+                arm.translateY(0.5)
+                rotor.translateX(0.5)
+                engine_height -= 1
+                if (engine_height == 0) {
+                    engine_extended = true
+                    engine_moving = false
+                }
+            });
+        }
+
+
+
+        requestAnimationFrame(render)
+    }
+
+
+    class CurvaBezierCuadratica {
+        constructor(p0, p1, p2) {
+            this.p0 = p0
+            this.p1 = p1
+            this.p2 = p2
+            this.curve = new THREE.QuadraticBezierCurve(new THREE.Vector2(p0.x, p0.y), new THREE.Vector2(p1.x, p1.y), new THREE.Vector2(p2.x, p2.y));
+        }
+
+
+        //Function to calculate the quadratic Bézier curve point at t
+        evalAt(t) {
+            const point = this.curve.getPoint(t);
+            return point
+        }
+
+        // Function to calculate the derivative of the quadratic Bézier curve (tangent vector)
+        getTangent(t) {
+            const point = this.curve.getTangent(t);
+            return point
+        }
+
+        // Function to calculate the normal vector at point on quadratic Bézier curve
+        getNormal(t) {
+            // Get the tangent vector at t
+            const tangent = getTangent(t);
+
+            // Calculate the normal vector by rotating the tangent vector 90 degrees
+            const normal = { x: -tangent.y, y: tangent.x };
+
+            // Normalize the normal vector
+            const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+            normal.x /= length;
+            normal.y /= length;
+
+            return new Vector(normal.x, normal.y);
+        }
+        getPoints(step) {
+            let points = []
+            points.push(this.curve.getPoint(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getPoint(index * step));
+            }
+            points.push(this.curve.getPoint(1));
+            return points
+        }
+        getCurveTangents(step) {
+            let points = []
+            points.push(this.curve.getTangent(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getTangent(index * step));
+            }
+            points.push(this.curve.getTangent(1));
+            return points
+        }
+        getCurveNormals(step) {
+            let points = []
+            points.push(this.curve.getNormal(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getNormal(index * step));
+            }
+            points.push(this.curve.getNormal(1));
+            return points
+        }
+    }
+
+    class CurvaBezierCubica {
+        constructor(p0, p1, p2) {
+            this.p0 = p0
+            this.p1 = p1
+            this.p2 = p2
+            this.p3 = p3
+            this.curve = new THREE.CubicBezierCurve(new THREE.Vector2(p0.x, p0.y), new THREE.Vector2(p1.x, p1.y), new THREE.Vector2(p2.x, p2.y), new THREE.Vector2(p3.x, p3.y));
+        }
+
+
+        //Function to calculate the quadratic Bézier curve point at t
+        evalAt(t) {
+            const point = this.curve.getPoint(t);
+            return point
+        }
+
+        // Function to calculate the derivative of the quadratic Bézier curve (tangent vector)
+        getTangent(t) {
+            const point = this.curve.getTangent(t);
+            return point
+        }
+
+        // Function to calculate the normal vector at point on quadratic Bézier curve
+        getNormal(t) {
+            // Get the tangent vector at t
+            const tangent = getTangent(t);
+
+            // Calculate the normal vector by rotating the tangent vector 90 degrees
+            const normal = { x: -tangent.y, y: tangent.x };
+
+            // Normalize the normal vector
+            const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+            normal.x /= length;
+            normal.y /= length;
+
+            return new Vector(normal.x, normal.y);
+        }
+        getPoints(step) {
+            let points = []
+            points.push(this.curve.getPoint(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getPoint(index * step));
+            }
+            points.push(this.curve.getPoint(1));
+            return points
+        }
+        getCurveTangents(step) {
+            let points = []
+            points.push(this.curve.getTangent(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getTangent(index * step));
+            }
+            points.push(this.curve.getTangent(1));
+            return points
+        }
+        getCurveNormals(step) {
+            let points = []
+            points.push(this.curve.getNormal(0));
+            for (let index = 1; index * step < 1; index++) {
+                points.push(this.curve.getNormal(index * step));
+            }
+            points.push(this.curve.getNormal(1));
+            return points
+        }
+    }
+
+    class Constructor3D {
+        constructor(points = []) {
+            this.points = points
+        }
+        get3DObject() {
+            const vertices = new Float32Array();
+            this.points.forEach(p => {
+                vertices.push(p.x)
+                vertices.push(p.y)
+                vertices.push(p.z)
+            });
+
+            // itemSize = 3 because there are 3 values (components) per vertex
+            geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+            const material = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const mesh = new THREE.Mesh(geometry, material);
+            return mesh
+        }
+
+    }
+
+    // Invocar init() una vez que la ventana esté cargada
+    window.onload = init;
+
+
+</script>
+
+<body>
+</body>
+
+</html>
